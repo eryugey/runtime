@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"strings"
 	"syscall"
 	"unsafe"
 
@@ -32,6 +33,28 @@ func Ioctl(fd uintptr, request, data uintptr) error {
 	}
 
 	return nil
+}
+
+// IsBlockFileSystem returns true if the given fs type is based on a block device.
+// Here check the fs Type, if it is one of ext[2-4], btrfs and xfs filesystem,
+// we assume this fs type is based an block device based filesystem.
+func IsBlockFileSystem(fsType string) bool {
+	fsType = strings.Trim(fsType, " ")
+	fsTyperPrefix := fsType[:len(fsType)-1]
+
+	switch fsTyperPrefix {
+	//ext2, ext3, ext4 filesystem
+	case "ext":
+		fallthrough
+	//btrfs filesystem
+	case "btrf":
+		fallthrough
+		//xfs filesystem
+	case "xf":
+		return true
+	default:
+		return false
+	}
 }
 
 // FindContextID finds a unique context ID by generating a random number between 3 and max unsigned int (maxUint).
