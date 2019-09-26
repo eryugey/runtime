@@ -134,6 +134,7 @@ type runtime struct {
 	Debug               bool     `toml:"enable_debug"`
 	Tracing             bool     `toml:"enable_tracing"`
 	DisableNewNetNs     bool     `toml:"disable_new_netns"`
+	DisableNetNs        bool     `toml:"disable_netns"`
 	DisableGuestSeccomp bool     `toml:"disable_guest_seccomp"`
 	SandboxCgroupOnly   bool     `toml:"sandbox_cgroup_only"`
 	Experimental        []string `toml:"experimental"`
@@ -1159,6 +1160,7 @@ func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolved
 
 	config.SandboxCgroupOnly = tomlConf.Runtime.SandboxCgroupOnly
 	config.DisableNewNetNs = tomlConf.Runtime.DisableNewNetNs
+	config.DisableNetNs = tomlConf.Runtime.DisableNetNs
 	for _, f := range tomlConf.Runtime.Experimental {
 		feature := exp.Get(f)
 		if feature == nil {

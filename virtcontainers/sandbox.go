@@ -837,7 +837,7 @@ func (s *Sandbox) startNetworkMonitor() error {
 		sandboxID:  s.id,
 	}
 
-	return s.network.Run(s.networkNS.NetNsPath, func() error {
+	return s.network.Run(&s.config.NetworkConfig, func() error {
 		pid, err := startNetmon(params)
 		if err != nil {
 			return err
@@ -1021,7 +1021,7 @@ func (s *Sandbox) startVM() (err error) {
 
 	s.Logger().Info("Starting VM")
 
-	if err := s.network.Run(s.networkNS.NetNsPath, func() error {
+	if err := s.network.Run(&s.config.NetworkConfig, func() error {
 		if s.factory != nil {
 			vm, err := s.factory.GetVM(ctx, VMConfig{
 				HypervisorType:   s.config.HypervisorType,

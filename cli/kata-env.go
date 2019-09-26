@@ -69,6 +69,7 @@ type RuntimeInfo struct {
 	Trace               bool
 	DisableGuestSeccomp bool
 	DisableNewNetNs     bool
+	DisableNetNs        bool
 	SandboxCgroupOnly   bool
 	Experimental        []exp.Feature
 	Path                string
@@ -188,6 +189,7 @@ func getRuntimeInfo(configFile string, config oci.RuntimeConfig) RuntimeInfo {
 		Config:              runtimeConfig,
 		Path:                runtimePath,
 		DisableNewNetNs:     config.DisableNewNetNs,
+		DisableNetNs:        config.DisableNetNs,
 		SandboxCgroupOnly:   config.SandboxCgroupOnly,
 		Experimental:        config.Experimental,
 		DisableGuestSeccomp: config.DisableGuestSeccomp,

@@ -157,6 +157,7 @@ type NetworkConfig struct {
 	NetNSPath         string
 	NetNsCreated      bool
 	DisableNewNetNs   bool
+	DisableNetNs      bool
 	NetmonConfig      NetmonConfig
 	InterworkingModel NetInterworkingModel
 }
@@ -1248,11 +1249,15 @@ func (n *Network) trace(ctx context.Context, name string) (opentracing.Span, con
 }
 
 // Run runs a callback in the specified network namespace.
-func (n *Network) Run(networkNSPath string, cb func() error) error {
+func (n *Network) Run(config *NetworkConfig, cb func() error) error {
 	span, _ := n.trace(context.Background(), "run")
 	defer span.Finish()
 
-	return doNetNS(networkNSPath, func(_ ns.NetNS) error {
+	if config.DisableNetNs {
+		return cb()
+	}
+
+	return doNetNS(config.NetNSPath, func(_ ns.NetNS) error {
 		return cb()
 	})
 }

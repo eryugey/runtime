@@ -119,6 +119,8 @@ type RuntimeConfig struct {
 
 	//Determines if create a netns for hypervisor process
 	DisableNewNetNs bool
+	// Determines if run hypervisor process in netns
+	DisableNetNs bool
 
 	//Determines kata processes are managed only in sandbox cgroup
 	SandboxCgroupOnly bool
@@ -265,6 +267,7 @@ func networkConfig(ocispec specs.Spec, config RuntimeConfig) (vc.NetworkConfig, 
 	}
 	netConf.InterworkingModel = config.InterNetworkModel
 	netConf.DisableNewNetNs = config.DisableNewNetNs
+	netConf.DisableNetNs = config.DisableNetNs
 
 	netConf.NetmonConfig = vc.NetmonConfig{
 		Path:   config.NetmonConfig.Path,

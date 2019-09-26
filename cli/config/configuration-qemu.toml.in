@@ -414,6 +414,12 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 # If you are using docker, `disable_new_netns` only works with `docker run --net=none`
 # (default: false)
 #disable_new_netns = true
+#
+# If enabled, all kata components will not be run in netns.
+# If netns path has been set by upper level like eni, the netns will be used anyway though
+# the `disable_new_netns` enabled, while `disable_netns` will disable netns thoroughly.
+# (default: false)
+#disable_netns = true
 
 # if enabled, the runtime will add all the kata processes inside one dedicated cgroup.
 # The container cgroups in the host are not created, just one single cgroup per sandbox.
