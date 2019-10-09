@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/containerd/cgroups"
+	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
@@ -862,6 +863,12 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 	// If devices were not found in storage, create Device implementations
 	// from the configuration. This should happen at create.
 	var storedDevices []ContainerDevice
+
+	nydusDev, ok := c.config.Annotations[vcAnnotations.NydusDevicePath]
+	if !ok {
+		nydusDev = ""
+	}
+
 	for _, info := range contConfig.DeviceInfos {
 		dev, err := c.sandbox.devManager.NewDevice(info)
 		if err != nil {
@@ -875,6 +882,10 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 			UID:           info.UID,
 			GID:           info.GID,
 		})
+
+		if nydusDev != "" && dev.GetPath() == nydusDev {
+			c.config.Annotations[vcAnnotations.NydusDeviceID] = dev.DeviceID()
+		}
 	}
 	c.devices = filterDevices(c, storedDevices)
 	return nil

@@ -57,12 +57,14 @@ var (
 	defaultRequestTimeout       = 60 * time.Second
 	errorMissingProxy           = errors.New("Missing proxy pointer")
 	errorMissingOCISpec         = errors.New("Missing OCI specification")
+	errorMissingNydusDev        = errors.New("Missing nydus rw device ID")
 	defaultKataHostSharedDir    = "/run/kata-containers/shared/sandboxes/"
 	defaultKataGuestSharedDir   = "/run/kata-containers/shared/containers/"
 	mountGuestTag               = "kataShared"
 	defaultKataGuestSandboxDir  = "/run/kata-containers/sandbox/"
 	type9pFs                    = "9p"
 	typeVirtioFS                = "virtio_fs"
+	typeOverlayFs               = "overlay"
 	typeVirtioFSNoCache         = "none"
 	kata9pDevType               = "9p"
 	kataMmioBlkDevType          = "mmioblk"
@@ -71,6 +73,7 @@ var (
 	kataSCSIDevType             = "scsi"
 	kataNvdimmDevType           = "nvdimm"
 	kataVirtioFSDevType         = "virtio-fs"
+	kataOverlayFSDevType        = "overlay"
 	sharedDir9pOptions          = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
 	sharedDirVirtioFSOptions    = []string{"default_permissions,allow_other,rootmode=040000,user_id=0,group_id=0", "nodev"}
 	sharedDirVirtioFSDaxOptions = "dax"
@@ -1163,7 +1166,59 @@ func (k *kataAgent) rollbackFailingContainerCreation(c *Container) {
 	}
 }
 
-func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPathParent string) (*grpc.Storage, error) {
+func setupNydusStorages(ctx context.Context, sandbox *Sandbox, c *Container, hostSharedDir, guestSharedDir string) ([]*grpc.Storage, error) {
+	var nydusStorages []*grpc.Storage
+
+	rootPathParent := filepath.Join(kataGuestSharedDir(), c.id)
+	nydusGuestRwlayerDir := filepath.Join(rootPathParent, "nydus-rw")
+	nydusHostRwlayerDir := filepath.Join(hostSharedDir, sandbox.id, c.id, "nydus-rw")
+	if err := os.MkdirAll(nydusHostRwlayerDir, mountPerm); err != nil {
+		return nil, err
+	}
+
+	nydusDevID, ok := c.config.Annotations[vcAnnotations.NydusDeviceID]
+	if !ok {
+		return nil, errorMissingNydusDev
+	}
+	nydusDev := sandbox.devManager.GetDeviceByID(nydusDevID)
+
+	if nydusDev.DeviceType() != config.DeviceBlock {
+		return nil, fmt.Errorf("Nydus device is not a block device: %v", nydusDev.GetPath())
+	}
+
+	d, ok := nydusDev.GetDeviceInfo().(*config.BlockDrive)
+	if !ok || d == nil {
+		return nil, fmt.Errorf("malformed nydus block drive: %v", nydusDev.GetPath())
+	}
+
+	nydusRwStorage := &grpc.Storage{
+		Driver:     kataBlkDevType,
+		Source:     d.PCIAddr,
+		Fstype:     "ext4",
+		MountPoint: nydusGuestRwlayerDir,
+		Options:    []string{"defaults"},
+	}
+	nydusStorages = append(nydusStorages, nydusRwStorage)
+
+	rootPath := filepath.Join(rootPathParent, c.rootfsSuffix)
+	lowerDir := filepath.Join(rootPathParent, "nydus-rootfs")
+	upperDir := filepath.Join(rootPathParent, "nydus-rw/upper")
+	workDir := filepath.Join(rootPathParent, "nydus-rw/work")
+	nydusOvlStorage := &grpc.Storage{
+		Driver:     kataOverlayFSDevType,
+		Source:     c.id + "-rootfs",
+		Fstype:     "overlay",
+		MountPoint: rootPath,
+		Options:    []string{"lowerdir=" + lowerDir + ",upperdir=" + upperDir + ",workdir=" + workDir},
+	}
+	nydusStorages = append(nydusStorages, nydusOvlStorage)
+
+	return nydusStorages, nil
+}
+
+func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPathParent string) ([]*grpc.Storage, error) {
+	var storages []*grpc.Storage
+
 	if c.state.Fstype != "" && c.state.BlockDeviceID != "" {
 		// The rootfs storage volume represents the container rootfs
 		// mount point inside the guest.
@@ -1214,7 +1269,26 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 			rootfs.Options = []string{"nouuid"}
 		}
 
-		return rootfs, nil
+		storages = append(storages, rootfs)
+		return storages, nil
+	}
+
+	// Nydus:
+	// - use virtiofsd to share image layer with host;
+	// - use a seperate device as container writable layer;
+	// - overlay image layer and writable layer in guest.
+	if _, ok := c.config.Annotations[vcAnnotations.NydusDeviceID]; ok {
+		storages, err := setupNydusStorages(k.ctx, sandbox, c, kataHostSharedDir(), kataGuestSharedDir())
+		if err != nil {
+			return nil, err
+		}
+
+		if err := bindMountNydusRootfs(k.ctx, kataHostSharedDir(), sandbox.id, c.id, c.rootFs.Target, true); err != nil {
+			return nil, err
+		}
+
+		k.Logger().Debugf("NydusStorages: %+v", storages)
+		return storages, nil
 	}
 
 	// This is not a block based device rootfs.
@@ -1248,7 +1322,7 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 
 	var ctrStorages []*grpc.Storage
 	var ctrDevices []*grpc.Device
-	var rootfs *grpc.Storage
+	var rootfs []*grpc.Storage
 
 	// This is the guest absolute root path for that container.
 	rootPathParent := filepath.Join(kataGuestSharedDir(), c.id)
@@ -1269,7 +1343,7 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 		// We only need to do this for block based rootfs, as we
 		// want the agent to mount it into the right location
 		// (kataGuestSharedDir/ctrID/
-		ctrStorages = append(ctrStorages, rootfs)
+		ctrStorages = append(ctrStorages, rootfs...)
 	}
 
 	ociSpec := c.GetPatchedOCISpec()

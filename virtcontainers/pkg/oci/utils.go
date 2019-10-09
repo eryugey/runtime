@@ -877,6 +877,11 @@ func ContainerConfig(ocispec specs.Spec, bundlePath, cid, console string, detach
 
 	containerConfig.Annotations[vcAnnotations.ContainerTypeKey] = string(cType)
 
+	nydusDev, ok := ocispec.Annotations[vcAnnotations.NydusDevicePath]
+	if ok {
+		containerConfig.Annotations[vcAnnotations.NydusDevicePath] = nydusDev
+	}
+
 	return containerConfig, nil
 }
 

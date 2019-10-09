@@ -74,6 +74,25 @@ func IsBlockDevice(filePath string) bool {
 	return false
 }
 
+// GetMajorMinorByPath returns major and minor ID of the given device path
+func GetMajorMinorByPath(path string) (int64, int64, error) {
+	if !IsBlockDevice(path) {
+		return -1, -1, fmt.Errorf("path(\"%s\") is not a block device", path)
+	}
+
+	devicePath, err := ResolvePath(path)
+	if err != nil {
+		return -1, -1, err
+	}
+
+	stat := syscall.Stat_t{}
+	err = syscall.Stat(devicePath, &stat)
+	if err != nil {
+		return -1, -1, err
+	}
+	return int64(unix.Major(stat.Rdev)), int64(unix.Minor(stat.Rdev)), nil
+}
+
 // fileSize returns the number of bytes in the specified file
 func fileSize(file string) (int64, error) {
 	st := syscall.Stat_t{}

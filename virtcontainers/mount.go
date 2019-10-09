@@ -26,6 +26,8 @@ const DefaultShmSize = 65536 * 1024
 
 var rootfsDir = "rootfs"
 
+const nydusRootfs = "nydus-rootfs"
+
 var systemMountPrefixes = []string{"/proc", "/sys"}
 
 func isSystemMount(m string) bool {
@@ -303,6 +305,30 @@ func bindMountContainerRootfs(ctx context.Context, sharedDir, sandboxID, cID, cR
 	rootfsDest := filepath.Join(sharedDir, sandboxID, cID, rootfsDir)
 
 	return bindMount(ctx, cRootFs, rootfsDest, readonly)
+}
+
+// bindMountNydusRootfs bind mounts image metadata as "nydus-rootfs"
+func bindMountNydusRootfs(ctx context.Context, sharedDir, sandboxID, cID, cRootFs string, readonly bool) error {
+	span, _ := trace(ctx, "bindMountNydusRootfs")
+	defer span.Finish()
+
+	rootfsDest := filepath.Join(sharedDir, sandboxID, cID, rootfsDir)
+	if err := os.MkdirAll(rootfsDest, 0755); err != nil {
+		return fmt.Errorf("failed to mkdir: %s", rootfsDest)
+	}
+
+	nydusRootfsSrc := filepath.Join(cRootFs, nydusRootfs)
+	nydusRootfsDst := filepath.Join(sharedDir, sandboxID, cID, nydusRootfs)
+
+	f, err := syscall.Creat(nydusRootfsDst, 0)
+	if err != nil {
+		return err
+	}
+	syscall.Close(f)
+
+	logrus.WithField("container", cID).Debugf("bind mounting %s to %s",
+		nydusRootfsSrc, nydusRootfsDst)
+	return bindMount(ctx, nydusRootfsSrc, nydusRootfsDst, readonly)
 }
 
 // Mount describes a container mount.

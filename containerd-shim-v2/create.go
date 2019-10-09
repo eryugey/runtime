@@ -26,13 +26,14 @@ import (
 
 	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 )
 
 func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*container, error) {
 	rootFs := vc.RootFs{Mounted: s.mount}
-	if len(r.Rootfs) == 1 {
+	if len(r.Rootfs) >= 1 {
 		m := r.Rootfs[0]
 		rootFs.Source = m.Source
 		rootFs.Type = m.Type
@@ -43,6 +44,28 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 	ociSpec, bundlePath, err := loadSpec(r)
 	if err != nil {
 		return nil, err
+	}
+
+	logrus.Debugf("container rootfs mounts: %+v", r.Rootfs)
+	if len(r.Rootfs) > 1 {
+		// NOTE:
+		// assume writable layer device is the second mount and add it into "OCI device list".
+		rm := r.Rootfs[1]
+		wlayerDevice := specs.LinuxDevice{}
+		wlayerDevice.Type = "b"
+		wlayerDevice.Path = rm.Source
+		wlayerDevice.Major, wlayerDevice.Minor, err = katautils.GetMajorMinorByPath(rm.Source)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to query blockdev: %v: %v", rm.Source, err)
+		}
+		// prepare for passing writable layer into guest
+		ociSpec.Linux.Devices = append(ociSpec.Linux.Devices, wlayerDevice)
+		if ociSpec.Annotations == nil {
+			ociSpec.Annotations = make(map[string]string)
+		}
+		ociSpec.Annotations[vcAnnotations.NydusDevicePath] = rm.Source
+
+		r.Rootfs = append(r.Rootfs[:1], r.Rootfs[2:]...)
 	}
 
 	containerType, err := oci.ContainerType(*ociSpec)

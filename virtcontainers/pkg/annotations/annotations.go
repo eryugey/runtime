@@ -9,6 +9,7 @@ const (
 	kataAnnotationsPrefix     = "io.katacontainers."
 	kataConfAnnotationsPrefix = kataAnnotationsPrefix + "config."
 	kataAnnotHypervisorPrefix = kataConfAnnotationsPrefix + "hypervisor."
+	kataAnnoSnapshotterPrefix = kataAnnotationsPrefix + "snapshotter."
 
 	//
 	// OCI
@@ -178,6 +179,15 @@ const (
 	// BlockDeviceCacheNoflush is a sandbox annotation that specifies cache-related options for block devices.
 	// Denotes whether flush requests for the device are ignored.
 	BlockDeviceCacheNoflush = kataAnnotHypervisorPrefix + "block_device_cache_noflush"
+	//
+	//	Snapshotter related annoations
+	//
+
+	// NydusDevicePath is the device path on host of nydus RW layer
+	NydusDevicePath = kataAnnoSnapshotterPrefix + "NydusDevicePath"
+
+	// NydusDeviceID is the device ID of nydus RW layer
+	NydusDeviceID = kataAnnoSnapshotterPrefix + "NydusDeviceID"
 )
 
 // Agent related annotations
