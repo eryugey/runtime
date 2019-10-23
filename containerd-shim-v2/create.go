@@ -54,9 +54,15 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		wlayerDevice := specs.LinuxDevice{}
 		wlayerDevice.Type = "b"
 		wlayerDevice.Path = rm.Source
-		wlayerDevice.Major, wlayerDevice.Minor, err = katautils.GetMajorMinorByPath(rm.Source)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to query blockdev: %v: %v", rm.Source, err)
+		if katautils.IsBlockDevice(rm.Source) {
+			wlayerDevice.Major, wlayerDevice.Minor, err = katautils.GetMajorMinorByPath(rm.Source)
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed to query blockdev: %v: %v", rm.Source, err)
+			}
+		} else {
+			// Use regular file as block device backend
+			wlayerDevice.Major = -1
+			wlayerDevice.Minor = -1
 		}
 		// prepare for passing writable layer into guest
 		ociSpec.Linux.Devices = append(ociSpec.Linux.Devices, wlayerDevice)
