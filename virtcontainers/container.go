@@ -420,6 +420,12 @@ func (c *Container) GetPatchedOCISpec() *specs.Spec {
 	return c.config.CustomSpec
 }
 
+// hasNydus returns if container has NydusDeviceID annotation
+func (c *Container) hasNydus() bool {
+	_, ok := c.config.Annotations[vcAnnotations.NydusDeviceID]
+	return ok
+}
+
 // storeContainer stores a container config.
 func (c *Container) storeContainer() error {
 	if c.sandbox.supportNewStore() {
@@ -1156,8 +1162,14 @@ func (c *Container) stop(force bool) error {
 		return err
 	}
 
-	if err := bindUnmountContainerRootfs(c.ctx, kataHostSharedDir(), c.sandbox.id, c.id); err != nil && !force {
-		return err
+	if c.hasNydus() {
+		if err := bindUnmountNydusRootfs(c.ctx, kataHostSharedDir(), c.sandbox.id, c.id); err != nil && !force {
+			return err
+		}
+	} else {
+		if err := bindUnmountContainerRootfs(c.ctx, kataHostSharedDir(), c.sandbox.id, c.id); err != nil && !force {
+			return err
+		}
 	}
 
 	if err := c.detachDevices(); err != nil && !force {

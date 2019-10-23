@@ -1153,14 +1153,19 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*gr
 // rollbackFailingContainerCreation rolls back important steps that might have
 // been performed before the container creation failed.
 // - Unmount container volumes.
-// - Unmount container rootfs.
+// - Unmount container rootfs or unmount nydus rootfs
 func (k *kataAgent) rollbackFailingContainerCreation(c *Container) {
 	if c != nil {
 		if err2 := c.unmountHostMounts(); err2 != nil {
 			k.Logger().WithError(err2).Error("rollback failed unmountHostMounts()")
 		}
 
-		if err2 := bindUnmountContainerRootfs(k.ctx, kataHostSharedDir(), c.sandbox.id, c.id); err2 != nil {
+		// If we enable nydus, Container rootfs is not bind mounted, just the nydus-rootfs file
+		if c.hasNydus() {
+			if err2 := bindUnmountNydusRootfs(k.ctx, kataHostSharedDir(), c.sandbox.id, c.id); err2 != nil {
+				k.Logger().WithError(err2).Error("rollback failed bindUnmountNydusRootfs()")
+			}
+		} else if err2 := bindUnmountContainerRootfs(k.ctx, kataHostSharedDir(), c.sandbox.id, c.id); err2 != nil {
 			k.Logger().WithError(err2).Error("rollback failed bindUnmountContainerRootfs()")
 		}
 	}
@@ -1277,7 +1282,7 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 	// - use virtiofsd to share image layer with host;
 	// - use a seperate device as container writable layer;
 	// - overlay image layer and writable layer in guest.
-	if _, ok := c.config.Annotations[vcAnnotations.NydusDeviceID]; ok {
+	if c.hasNydus() {
 		storages, err := setupNydusStorages(k.ctx, sandbox, c, kataHostSharedDir(), kataGuestSharedDir())
 		if err != nil {
 			return nil, err

@@ -354,17 +354,29 @@ type Mount struct {
 	BlockDeviceID string
 }
 
+func unmount(target string) error {
+	err := syscall.Unmount(target, syscall.MNT_DETACH)
+	if err == syscall.ENOENT {
+		logrus.Warnf("%s: %s", err, target)
+		return nil
+	}
+	return err
+}
+
 func bindUnmountContainerRootfs(ctx context.Context, sharedDir, sandboxID, cID string) error {
 	span, _ := trace(ctx, "bindUnmountContainerRootfs")
 	defer span.Finish()
 
 	rootfsDest := filepath.Join(sharedDir, sandboxID, cID, rootfsDir)
-	err := syscall.Unmount(rootfsDest, syscall.MNT_DETACH)
-	if err == syscall.ENOENT {
-		logrus.Warnf("%s: %s", err, rootfsDest)
-		return nil
-	}
-	return err
+	return unmount(rootfsDest)
+}
+
+func bindUnmountNydusRootfs(ctx context.Context, sharedDir, sandboxID, cID string) error {
+	span, _ := trace(ctx, "bindUnmountNydusRootfs")
+	defer span.Finish()
+
+	nydusRootfsDest := filepath.Join(sharedDir, sandboxID, cID, nydusRootfs)
+	return unmount(nydusRootfsDest)
 }
 
 func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbox) error {
@@ -377,7 +389,11 @@ func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbo
 		if c.state.Fstype == "" {
 			// even if error found, don't break out of loop until all mounts attempted
 			// to be unmounted, and collect all errors
-			errors = merr.Append(errors, bindUnmountContainerRootfs(c.ctx, sharedDir, sandbox.id, c.id))
+			if c.hasNydus() {
+				errors = merr.Append(errors, bindUnmountNydusRootfs(c.ctx, sharedDir, sandbox.id, c.id))
+			} else {
+				errors = merr.Append(errors, bindUnmountContainerRootfs(c.ctx, sharedDir, sandbox.id, c.id))
+			}
 		}
 	}
 	return errors.ErrorOrNil()
