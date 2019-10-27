@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	containerd_types "github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/mount"
@@ -60,9 +62,18 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 				return nil, errors.Wrapf(err, "failed to query blockdev: %v: %v", rm.Source, err)
 			}
 		} else {
+			// Get snapID part from the source path
+			// like "$PREFIX/snapshots/$id/wd.img" to
+			// distinguish writable devices attaching
+			// to the pod.
+			ps := strings.Split(rm.Source, "/")
+			id, err := strconv.ParseInt(ps[len(ps)-2], 10, 64)
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed to get uniq id from %q", rm.Source)
+			}
 			// Use regular file as block device backend
 			wlayerDevice.Major = -1
-			wlayerDevice.Minor = -1
+			wlayerDevice.Minor = id
 		}
 		// prepare for passing writable layer into guest
 		ociSpec.Linux.Devices = append(ociSpec.Linux.Devices, wlayerDevice)
