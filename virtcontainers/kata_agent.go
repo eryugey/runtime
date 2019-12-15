@@ -75,7 +75,7 @@ var (
 	kataVirtioFSDevType         = "virtio-fs"
 	kataOverlayFSDevType        = "overlay"
 	sharedDir9pOptions          = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
-	sharedDirVirtioFSOptions    = []string{"default_permissions,allow_other,rootmode=040000,user_id=0,group_id=0", "nodev"}
+	sharedDirVirtioFSOptions    = []string{"default_permissions,allow_other,rootmode=040000,user_id=0,group_id=0,tag=" + mountGuestTag, "nodev"}
 	sharedDirVirtioFSDaxOptions = "dax"
 	shmDir                      = "shm"
 	kataEphemeralDevType        = "ephemeral"
